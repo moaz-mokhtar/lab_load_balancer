@@ -1,5 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use awc::Client;
 use log::info;
 use serde::{Deserialize, Serialize};
 
@@ -59,10 +60,32 @@ async fn health(req: HttpRequest) -> impl Responder {
         request_accept_message
     );
     println!("{}", message);
-    
-    // let status: String = "Ok".to_string();
-    // let response = MessageResponse { status, message };
-    HttpResponse::Ok().body(message)
+
+    // Forward the request to the backend server
+    // let bd_server_address =
+    //     std::env::var("BE_SERVER_HOST").expect("Missed 'BE_SERVER_HOST' environment variable");
+    let bd_server_address = "localhost:8081".to_string();
+    let backend_server_url = format!("{}{}", "http://", bd_server_address);
+    println!("backend_server_url {}", backend_server_url);
+
+    let client = Client::default();
+    let backend_response = client
+        .get(backend_server_url)
+        .insert_header(("User-Agent", "awc/3.0"))
+        .insert_header(("Accept", "*/*"))
+        .send()
+        .await;
+
+    match backend_response {
+        Ok(mut response) => {
+            let response_body = response.body().await.unwrap();
+            HttpResponse::Ok().body(response_body)
+        }
+        Err(error) => {
+            println!("Error: {}", error);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
